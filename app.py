@@ -3,6 +3,7 @@ import duckdb
 import pandas as pd
 from datetime import datetime
 import pytz
+import json
 
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(page_title="AWE Peminjaman Barang", layout="wide")
@@ -30,7 +31,7 @@ def init_db():
             barcode VARCHAR,
             tanggal_kedatangan DATE,
             nama_barang VARCHAR,
-            jenis_berat VARCHAR,
+            berat_gr INTEGER,
             jenis_item VARCHAR,
             seri_item VARCHAR,
             status VARCHAR DEFAULT 'Dipinjam',
@@ -53,6 +54,15 @@ tab1, tab2, tab3 = st.tabs(["📝 Form Peminjaman", "🔄 Pengembalian", "📊 D
 # --- TAB 1: FORM PEMINJAMAN ---
 with tab1:
     st.subheader("Input Peminjaman Barang")
+    
+    # Ambil daftar opsi dari tabel product_catalog
+    conn_options = get_connection()
+    try:
+        catalog_options = conn_options.execute("SELECT DISTINCT product_name FROM AWE_DB.product_catalog ORDER BY product_name").df()['product_name'].tolist()
+    except Exception:
+        catalog_options = []  # Fallback jika tabel belum ada
+    conn_options.close()
+
     with st.form("pinjam_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
@@ -61,27 +71,30 @@ with tab1:
             tgl_datang = st.date_input("Tanggal Kedatangan")
         
         with col2:
-            jenis_berat = st.selectbox("Jenis Berat", ["Gram", "Kilogram", "Unit", "Set"])
+            berat_gr = st.number_input("Berat dalam satuan gr", min_value=0, step=10)
             jenis_item = st.text_input("Jenis Item")
-            seri_input = st.text_area("Daftar Seri/Set Item", help="Pisahkan dengan koma (contoh: S01, S02, S03)")
+            # Menggunakan multiselect untuk input multiple seri
+            list_seri = st.multiselect(
+                "Pilih Item dari Katalog", 
+                options=catalog_options,
+                help="Pilih satu atau lebih seri item"
+            )
 
         submit_pinjam = st.form_submit_button("Simpan Data Peminjaman")
 
         if submit_pinjam:
-            if barcode and seri_input:
+            if barcode and list_seri:
                 conn = get_connection()
                 waktu_wib = get_wib_now()
-                # Memisahkan seri item berdasarkan koma
-                list_seri = [s.strip() for s in seri_input.split(",")]
                 
-                for seri in list_seri:
-                    conn.execute("""
-                        INSERT INTO AWE_DB.peminjaman (id, barcode, tanggal_kedatangan, nama_barang, jenis_berat, jenis_item, seri_item, waktu_pinjam)
-                        VALUES (nextval('AWE_DB.seq_id'), ?, ?, ?, ?, ?, ?, ?)
-                    """, (barcode, tgl_datang, nama_barang, jenis_berat, jenis_item, seri, waktu_wib.replace(tzinfo=None)))
+                # Mengirim data seri sebagai JSON string ke database
+                conn.execute("""
+                    INSERT INTO AWE_DB.peminjaman (id, barcode, tanggal_kedatangan, nama_barang, berat_gr, jenis_item, seri_item, waktu_pinjam)
+                    VALUES (nextval('AWE_DB.seq_id'), ?, ?, ?, ?, ?, ?, ?)
+                """, (barcode, tgl_datang, nama_barang, berat_gr, jenis_item, json.dumps(list_seri), waktu_wib.replace(tzinfo=None)))
                 
                 conn.close()
-                st.success(f"✅ Berhasil menginput {len(list_seri)} item dengan Barcode: {barcode}")
+                st.success(f"✅ Berhasil menginput data Barcode: {barcode} dengan {len(list_seri)} seri dalam format JSON.")
             else:
                 st.error("❌ Barcode dan Seri Item tidak boleh kosong!")
 
