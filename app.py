@@ -147,7 +147,6 @@ with tab3:
                 conn.execute("DELETE FROM AWE_DB.peminjaman WHERE id = ?", (id_hapus,))
                 conn.close()
                 st.warning(f"Data ID {id_hapus} telah dihapus.")
-                st.rerun()  # Pastikan streamlit >= 1.27.0
+                st.rerun()
     else:
         st.info("Belum ada data tersedia.")
-```
