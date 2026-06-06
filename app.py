@@ -23,9 +23,10 @@ def init_db():
     conn = get_connection()
     # Buat database dan tabel jika belum ada
     conn.execute("CREATE DATABASE IF NOT EXISTS AWE_DB")
+    conn.execute("CREATE SEQUENCE IF NOT EXISTS AWE_DB.seq_id")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS AWE_DB.peminjaman (
-            id SERIAL,
+            id INTEGER PRIMARY KEY,
             barcode VARCHAR,
             tanggal_kedatangan DATE,
             nama_barang VARCHAR,
@@ -75,9 +76,9 @@ with tab1:
                 
                 for seri in list_seri:
                     conn.execute("""
-                        INSERT INTO AWE_DB.peminjaman (barcode, tanggal_kedatangan, nama_barang, jenis_berat, jenis_item, seri_item, waktu_pinjam)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, (barcode, tgl_datang, nama_barang, jenis_berat, jenis_item, seri, waktu_wib))
+                        INSERT INTO AWE_DB.peminjaman (id, barcode, tanggal_kedatangan, nama_barang, jenis_berat, jenis_item, seri_item, waktu_pinjam)
+                        VALUES (nextval('AWE_DB.seq_id'), ?, ?, ?, ?, ?, ?, ?)
+                    """, (barcode, tgl_datang, nama_barang, jenis_berat, jenis_item, seri, waktu_wib.replace(tzinfo=None)))
                 
                 conn.close()
                 st.success(f"✅ Berhasil menginput {len(list_seri)} item dengan Barcode: {barcode}")
@@ -105,7 +106,7 @@ with tab2:
                     UPDATE AWE_DB.peminjaman 
                     SET status = 'Kembali', waktu_kembali = ? 
                     WHERE barcode = ? AND status = 'Dipinjam'
-                """, (waktu_kembali, input_barcode_kembali))
+                """, (waktu_kembali.replace(tzinfo=None), input_barcode_kembali))
                 conn.close()
                 st.success(f"✅ Barcode {input_barcode_kembali} berhasil dikembalikan pada {waktu_kembali.strftime('%Y-%m-%d %H:%M:%S')} WIB")
                 st.rerun()
