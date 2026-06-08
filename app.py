@@ -147,7 +147,7 @@ with tab2:
     
     if input_barcode_kembali:
         # Cari data yang statusnya masih 'Dipinjam'
-        query = "SELECT id, nama_barang, warna_item, waktu_pinjam FROM AWE_DB.peminjaman WHERE barcode = ? AND status = 'Dipinjam'"
+        query = "SELECT id, nama_barang, berat_gr, warna_item, waktu_pinjam FROM AWE_DB.peminjaman WHERE barcode = ? AND status = 'Dipinjam'"
         data_kembali = conn.execute(query, (input_barcode_kembali,)).df()
         
         if not data_kembali.empty:
