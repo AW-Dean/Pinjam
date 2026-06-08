@@ -143,7 +143,15 @@ with tab1:
 # --- TAB 2: PENGEMBALIAN ---
 with tab2:
     st.subheader("Form Pengembalian")
-    input_barcode_kembali = st.text_input("Scan Barcode untuk Pengembalian", placeholder="Arahkan scanner ke barcode...")
+    
+    # Mode cepat untuk memproses scan tanpa klik tombol tambahan
+    mode_cepat = st.toggle("Mode Scan Cepat (Otomatis Setujui)", value=True)
+    
+    input_barcode_kembali = st.text_input(
+        "Scan Barcode untuk Pengembalian", 
+        placeholder="Arahkan scanner ke barcode...",
+        key="input_barcode_ret"
+    )
     
     if input_barcode_kembali:
         # Cari data yang statusnya masih 'Dipinjam'
@@ -151,19 +159,34 @@ with tab2:
         data_kembali = conn.execute(query, (input_barcode_kembali,)).df()
         
         if not data_kembali.empty:
-            data_kembali['warna_item'] = data_kembali['warna_item'].apply(format_warna_display)
-            st.write("Detail Barang yang Dipinjam:")
-            st.dataframe(data_kembali, use_container_width=True, hide_index=True)
-            
-            if st.button("✅ Setujui Pengembalian", type="primary"):
+            if mode_cepat:
+                # Langsung proses pengembalian tanpa menunggu klik tombol
                 waktu_kembali = get_wib_now()
                 conn.execute("""
                     UPDATE AWE_DB.peminjaman 
                     SET status = 'Kembali', waktu_kembali = ? 
                     WHERE barcode = ? AND status = 'Dipinjam'
                 """, (waktu_kembali.replace(tzinfo=None), input_barcode_kembali))
-                st.success(f"✅ Barcode {input_barcode_kembali} berhasil dikembalikan pada {waktu_kembali.strftime('%Y-%m-%d %H:%M:%S')} WIB")
-                st.rerun()
+                
+                st.toast(f"✅ Barcode {input_barcode_kembali} Berhasil Kembali!", icon='📦')
+                # Berikan delay sedikit agar operator bisa melihat feedback sebelum field dibersihkan
+                st.info(f"Berhasil mengembalikan: {data_kembali.iloc[0]['nama_barang']}")
+                if st.button("Siap untuk Scan Berikutnya"):
+                    st.rerun()
+            else:
+                data_kembali['warna_item'] = data_kembali['warna_item'].apply(format_warna_display)
+                st.write("Detail Barang yang Dipinjam:")
+                st.dataframe(data_kembali, use_container_width=True, hide_index=True)
+                
+                if st.button("✅ Setujui Pengembalian", type="primary"):
+                    waktu_kembali = get_wib_now()
+                    conn.execute("""
+                        UPDATE AWE_DB.peminjaman 
+                        SET status = 'Kembali', waktu_kembali = ? 
+                        WHERE barcode = ? AND status = 'Dipinjam'
+                    """, (waktu_kembali.replace(tzinfo=None), input_barcode_kembali))
+                    st.success(f"✅ Barcode {input_barcode_kembali} berhasil dikembalikan!")
+                    st.rerun()
         else:
             st.warning("⚠️ Tidak ada item aktif yang dipinjam dengan barcode tersebut.")
 
