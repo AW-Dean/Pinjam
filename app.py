@@ -34,16 +34,9 @@ def init_db(conn):
             nama_barang VARCHAR,
             berat_gr DOUBLE,
             warna_item VARCHAR,
-            seri_item VARCHAR,
             status VARCHAR DEFAULT 'Dipinjam',
             waktu_pinjam TIMESTAMP,
             waktu_kembali TIMESTAMP
-        )
-    """)
-    # Tambahkan tabel katalog jika belum ada agar tidak error saat query options
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS AWE_DB.product_catalog (
-            product_name VARCHAR
         )
     """)
 
@@ -62,12 +55,6 @@ tab1, tab2, tab3 = st.tabs(["📝 Form Peminjaman", "🔄 Pengembalian", "📊 D
 with tab1:
     st.subheader("Input Peminjaman Barang")
     
-    # Ambil daftar opsi dari tabel product_catalog
-    try:
-        catalog_options = conn.execute("SELECT DISTINCT product_name FROM AWE_DB.product_catalog ORDER BY product_name").df()['product_name'].tolist()
-    except Exception:
-        catalog_options = []  # Fallback jika tabel belum ada
-
     col1, col2 = st.columns(2)
     with col1:
         barcode = st.text_input("Barcode Utama")
@@ -75,11 +62,6 @@ with tab1:
         tgl_datang = st.date_input("Tanggal Kedatangan")
     
     with col2:
-        list_seri = st.multiselect(
-            "Pilih Item dari Katalog (Seri)", 
-            options=catalog_options,
-            help="Pilih satu atau lebih seri item"
-        )
         # Input Multiple Warna
         list_warna = st.multiselect(
             "Pilih Warna Item",
@@ -103,17 +85,17 @@ with tab1:
         st.write("---")
 
     if st.button("Simpan Data Peminjaman", type="primary", use_container_width=True):
-        if barcode and list_seri and warna_with_berat:
+        if barcode and warna_with_berat:
             waktu_wib = get_wib_now()
             conn.execute("""
-                INSERT INTO AWE_DB.peminjaman (id, barcode, tanggal_kedatangan, nama_barang, berat_gr, warna_item, seri_item, waktu_pinjam)
-                VALUES (nextval('AWE_DB.seq_id'), ?, ?, ?, ?, ?, ?, ?)
-            """, (barcode, tgl_datang, nama_barang, total_berat, json.dumps(warna_with_berat), json.dumps(list_seri), waktu_wib.replace(tzinfo=None)))
+                INSERT INTO AWE_DB.peminjaman (id, barcode, tanggal_kedatangan, nama_barang, berat_gr, warna_item, waktu_pinjam)
+                VALUES (nextval('AWE_DB.seq_id'), ?, ?, ?, ?, ?, ?)
+            """, (barcode, tgl_datang, nama_barang, total_berat, json.dumps(warna_with_berat), waktu_wib.replace(tzinfo=None)))
             
             st.success(f"✅ Berhasil menginput data Barcode: {barcode}")
             st.rerun()
         else:
-            st.error("❌ Barcode, Seri Item, dan minimal satu Warna harus diisi!")
+            st.error("❌ Barcode dan minimal satu Warna harus diisi!")
 
 # --- TAB 2: PENGEMBALIAN ---
 with tab2:
@@ -122,14 +104,14 @@ with tab2:
     
     if input_barcode_kembali:
         # Cari data yang statusnya masih 'Dipinjam'
-        query = "SELECT id, seri_item, nama_barang, waktu_pinjam FROM AWE_DB.peminjaman WHERE barcode = ? AND status = 'Dipinjam'"
+        query = "SELECT id, nama_barang, waktu_pinjam FROM AWE_DB.peminjaman WHERE barcode = ? AND status = 'Dipinjam'"
         data_kembali = conn.execute(query, (input_barcode_kembali,)).df()
         
         if not data_kembali.empty:
             st.write("Detail Barang yang Dipinjam:")
             st.dataframe(data_kembali, use_container_width=True)
             
-            if st.button("✅ Setujui Pengembalian (Semua Seri)", type="primary"):
+            if st.button("✅ Setujui Pengembalian", type="primary"):
                 waktu_kembali = get_wib_now()
                 conn.execute("""
                     UPDATE AWE_DB.peminjaman 
@@ -144,7 +126,7 @@ with tab2:
 # --- TAB 3: LIHAT DATA (EDIT & HAPUS) ---
 with tab3:
     st.subheader("Daftar Riwayat Peminjaman")
-    df = conn.execute("SELECT id, barcode, nama_barang, berat_gr, warna_item, seri_item, status, waktu_pinjam, waktu_kembali FROM AWE_DB.peminjaman ORDER BY waktu_pinjam DESC").df()
+    df = conn.execute("SELECT id, barcode, nama_barang, berat_gr, warna_item, status, waktu_pinjam, waktu_kembali FROM AWE_DB.peminjaman ORDER BY waktu_pinjam DESC").df()
 
     if not df.empty:
         st.dataframe(df, use_container_width=True)
