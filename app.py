@@ -147,7 +147,7 @@ with tab2:
     
     if input_barcode_kembali:
         # Cari data yang statusnya masih 'Dipinjam'
-        query = "SELECT id, nama_barang, berat_gr, warna_item, waktu_pinjam FROM AWE_DB.peminjaman WHERE barcode = ? AND status = 'Dipinjam'"
+        query = "SELECT id, nama_barang, warna_item, berat_gr, waktu_pinjam FROM AWE_DB.peminjaman WHERE barcode = ? AND status = 'Dipinjam'"
         data_kembali = conn.execute(query, (input_barcode_kembali,)).df()
         
         if not data_kembali.empty:
@@ -170,9 +170,20 @@ with tab2:
 # --- TAB 3: LIHAT DATA (EDIT & HAPUS) ---
 with tab3:
     st.subheader("Daftar Riwayat Peminjaman")
-    df = conn.execute("SELECT id, barcode, nama_barang, berat_gr, warna_item, status, waktu_pinjam, waktu_kembali FROM AWE_DB.peminjaman ORDER BY waktu_pinjam DESC").df()
+    df = conn.execute("SELECT id, barcode, nama_barang, warna_item, berat_gr, status, waktu_pinjam, waktu_kembali FROM AWE_DB.peminjaman ORDER BY waktu_pinjam DESC").df()
 
     if not df.empty:
+        # --- RINGKASAN DATA (CARDS) ---
+        df_active = df[df['status'] == 'Dipinjam']
+        total_items = len(df_active)
+        total_weight = df_active['berat_gr'].sum()
+
+        col_m1, col_m2 = st.columns(2)
+        with col_m1:
+            st.metric("📦 Total Barang Dipinjam", f"{total_items} Item")
+        with col_m2:
+            st.metric("⚖️ Total Berat Dipinjam", f"{total_weight:,.2f} gr")
+
         df_display = df.copy()
         df_display['warna_item'] = df_display['warna_item'].apply(format_warna_display)
         
