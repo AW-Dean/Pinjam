@@ -145,7 +145,7 @@ with tab2:
         
         if not data_kembali.empty:
             st.write("Detail Barang yang Dipinjam:")
-            st.dataframe(data_kembali, use_container_width=True)
+            st.dataframe(data_kembali, use_container_width=True, hide_index=True)
             
             if st.button("✅ Setujui Pengembalian", type="primary"):
                 waktu_kembali = get_wib_now()
@@ -176,7 +176,7 @@ with tab3:
         df_display = df.copy()
         df_display['warna_item'] = df_display['warna_item'].apply(format_warna_display)
         
-        st.dataframe(df_display, use_container_width=True)
+        st.dataframe(df_display, use_container_width=True, hide_index=True)
         
         st.divider()
         st.subheader("Aksi Data")
