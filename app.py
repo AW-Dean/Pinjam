@@ -65,7 +65,7 @@ with tab1:
         # Input Multiple Warna
         list_warna = st.multiselect(
             "Pilih Warna Item",
-            options=["Merah", "Biru", "Hijau", "Kuning", "Hitam", "Putih", "Silver", "Gold"],
+            options=["Semu", "Putih", "PB", "Puth Kapas"],
             help="Pilih warna yang tersedia"
         )
 
@@ -74,18 +74,26 @@ with tab1:
     total_berat = 0.0
     if list_warna:
         st.write("---")
-        st.caption("Input Berat untuk masing-masing warna:")
-        cols_warna = st.columns(len(list_warna))
+        st.markdown("##### ⚖️ Input Berat per Warna")
+        # Menggunakan kolom agar input tidak memanjang ke bawah jika warna banyak
+        warna_cols = st.columns(3) 
         for i, warna in enumerate(list_warna):
-            with cols_warna[i]:
-                b = st.number_input(f"Berat {warna} (gr)", min_value=0.0, format="%.2f", key=f"w_{warna}")
-                warna_with_berat.append({"warna": warna, "berat": b})
-                total_berat += b
-        st.info(f"**Total Berat Keseluruhan:** {total_berat:.2f} gr")
+            with warna_cols[i % 3]:
+                berat_val = st.number_input(
+                    f"Berat {warna} (gr)", 
+                    min_value=0.0, 
+                    step=0.1, 
+                    format="%.2f", 
+                    key=f"w_{warna}_{barcode}" # Key unik agar tidak konflik
+                )
+                warna_with_berat.append({"warna": warna, "berat": berat_val})
+                total_berat += berat_val
+        
+        st.success(f"**Total Berat Gabungan:** {total_berat:.2f} gr")
         st.write("---")
 
     if st.button("Simpan Data Peminjaman", type="primary", use_container_width=True):
-        if barcode and warna_with_berat:
+        if barcode and nama_barang and total_berat > 0:
             waktu_wib = get_wib_now()
             conn.execute("""
                 INSERT INTO AWE_DB.peminjaman (id, barcode, tanggal_kedatangan, nama_barang, berat_gr, warna_item, waktu_pinjam)
@@ -95,7 +103,7 @@ with tab1:
             st.success(f"✅ Berhasil menginput data Barcode: {barcode}")
             st.rerun()
         else:
-            st.error("❌ Barcode dan minimal satu Warna harus diisi!")
+            st.error("❌ Barcode, Nama Barang, dan Berat Warna harus diisi dengan benar!")
 
 # --- TAB 2: PENGEMBALIAN ---
 with tab2:
@@ -129,7 +137,18 @@ with tab3:
     df = conn.execute("SELECT id, barcode, nama_barang, berat_gr, warna_item, status, waktu_pinjam, waktu_kembali FROM AWE_DB.peminjaman ORDER BY waktu_pinjam DESC").df()
 
     if not df.empty:
-        st.dataframe(df, use_container_width=True)
+        # Pre-processing agar tampilan warna_item lebih cantik di tabel
+        def format_warna_display(json_str):
+            try:
+                data = json.loads(json_str)
+                return " | ".join([f"{d['warna']}: {d['berat']}g" for d in data])
+            except:
+                return json_str
+
+        df_display = df.copy()
+        df_display['warna_item'] = df_display['warna_item'].apply(format_warna_display)
+        
+        st.dataframe(df_display, use_container_width=True)
         
         st.divider()
         st.subheader("Aksi Data")
