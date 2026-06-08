@@ -33,12 +33,25 @@ def init_db(conn):
             tanggal_kedatangan DATE,
             nama_barang VARCHAR,
             berat_gr DOUBLE,
-            warna_item VARCHAR,
             status VARCHAR DEFAULT 'Dipinjam',
             waktu_pinjam TIMESTAMP,
             waktu_kembali TIMESTAMP
         )
     """)
+
+    # --- QUERY MIGRASI SEMENTARA ---
+    # Tambahkan warna_item jika belum ada
+    try:
+        conn.execute("ALTER TABLE AWE_DB.peminjaman ADD COLUMN warna_item VARCHAR")
+    except:
+        pass
+
+    # Hapus kolom lama jika masih ada agar tidak membingungkan
+    try:
+        conn.execute("ALTER TABLE AWE_DB.peminjaman DROP COLUMN seri_item")
+        conn.execute("ALTER TABLE AWE_DB.peminjaman DROP COLUMN jenis_item")
+    except:
+        pass
 
 # --- UTILS ---
 def get_wib_now():
@@ -51,6 +64,10 @@ st.title("📦 Sistem Manajemen Peminjaman (AWE_DB)")
 
 tab1, tab2, tab3 = st.tabs(["📝 Form Peminjaman", "🔄 Pengembalian", "📊 Data Peminjaman"])
 
+# Inisialisasi state untuk jumlah baris warna jika belum ada
+if "rows_warna" not in st.session_state:
+    st.session_state.rows_warna = 1
+
 # --- TAB 1: FORM PEMINJAMAN ---
 with tab1:
     st.subheader("Input Peminjaman Barang")
@@ -62,35 +79,39 @@ with tab1:
         tgl_datang = st.date_input("Tanggal Kedatangan")
     
     with col2:
-        # Input Multiple Warna
-        list_warna = st.multiselect(
-            "Pilih Warna Item",
-            options=["Semu", "Putih", "PB", "Puth Kapas"],
-            help="Pilih warna yang tersedia"
-        )
+        st.info("Klik tombol 'Tambah Baris Warna' di bawah untuk menambah warna yang sama dengan berat berbeda.")
 
     # Input Berat per Warna secara dinamis
     warna_with_berat = []
     total_berat = 0.0
-    if list_warna:
-        st.write("---")
-        st.markdown("##### ⚖️ Input Berat per Warna")
-        # Menggunakan kolom agar input tidak memanjang ke bawah jika warna banyak
-        warna_cols = st.columns(3) 
-        for i, warna in enumerate(list_warna):
-            with warna_cols[i % 3]:
-                berat_val = st.number_input(
-                    f"Berat {warna} (gr)", 
-                    min_value=0.0, 
-                    step=0.1, 
-                    format="%.2f", 
-                    key=f"w_{warna}_{barcode}" # Key unik agar tidak konflik
-                )
-                warna_with_berat.append({"warna": warna, "berat": berat_val})
-                total_berat += berat_val
+    
+    st.write("---")
+    st.markdown("##### ⚖️ Rincian Warna & Berat")
+    
+    # Loop berdasarkan jumlah baris di session_state
+    for i in range(st.session_state.rows_warna):
+        c1, c2 = st.columns([2, 2])
+        with c1:
+            w_val = st.selectbox(f"Warna {i+1}", ["Semu", "Putih", "PB", "Puth Kapas"], key=f"warna_sel_{i}")
+        with c2:
+            b_val = st.number_input(f"Berat {i+1} (gr)", min_value=0.0, step=0.1, format="%.2f", key=f"berat_in_{i}")
         
-        st.success(f"**Total Berat Gabungan:** {total_berat:.2f} gr")
-        st.write("---")
+        warna_with_berat.append({"warna": w_val, "berat": b_val})
+        total_berat += b_val
+
+    # Tombol untuk menambah/mengurangi baris
+    col_btn1, col_btn2, _ = st.columns([1, 1, 2])
+    with col_btn1:
+        if st.button("➕ Tambah Baris"):
+            st.session_state.rows_warna += 1
+            st.rerun()
+    with col_btn2:
+        if st.button("🗑️ Hapus Baris") and st.session_state.rows_warna > 1:
+            st.session_state.rows_warna -= 1
+            st.rerun()
+
+    st.success(f"**Total Berat Gabungan:** {total_berat:.2f} gr")
+    st.write("---")
 
     if st.button("Simpan Data Peminjaman", type="primary", use_container_width=True):
         if barcode and nama_barang and total_berat > 0:
@@ -100,6 +121,8 @@ with tab1:
                 VALUES (nextval('AWE_DB.seq_id'), ?, ?, ?, ?, ?, ?)
             """, (barcode, tgl_datang, nama_barang, total_berat, json.dumps(warna_with_berat), waktu_wib.replace(tzinfo=None)))
             
+            # Reset baris ke 1 setelah simpan
+            st.session_state.rows_warna = 1
             st.success(f"✅ Berhasil menginput data Barcode: {barcode}")
             st.rerun()
         else:
