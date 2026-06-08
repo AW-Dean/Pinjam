@@ -89,49 +89,42 @@ with tab1:
     # 2. Info diletakkan di atas rincian berat & warna
     st.info("Klik tombol 'Tambah Baris Warna' di bawah untuk menambah warna yang sama dengan berat berbeda.")
 
-    # 3. Fragment untuk mencegah loading glitch pada seluruh halaman
-    @st.fragment
-    def input_warna_fragment():
-        st.markdown("##### ⚖️ Rincian Warna & Berat")
-        warna_with_berat = []
-        total_berat = 0.0
+    st.markdown("##### ⚖️ Rincian Warna & Berat")
+    warna_with_berat = []
+    total_berat = 0.0
+    
+    # Loop baris input
+    for i in range(st.session_state.rows_warna):
+        c1, c2 = st.columns([2, 2])
+        with c1:
+            w_val = st.selectbox(f"Warna {i+1}", ["Semu", "Putih", "PB", "Puth Kapas"], key=f"warna_sel_{i}")
+        with c2:
+            b_val = st.number_input(f"Berat {i+1} (gr)", min_value=0.0, step=0.1, format="%.2f", key=f"berat_in_{i}")
         
-        # Loop baris input
-        for i in range(st.session_state.rows_warna):
-            c1, c2 = st.columns([2, 2])
-            with c1:
-                w_val = st.selectbox(f"Warna {i+1}", ["Semu", "Putih", "PB", "Puth Kapas"], key=f"warna_sel_{i}")
-            with c2:
-                b_val = st.number_input(f"Berat {i+1} (gr)", min_value=0.0, step=1.0, format="%.2f", key=f"berat_in_{i}")
-            
-            warna_with_berat.append({"warna": w_val, "berat": b_val})
-            total_berat += b_val
+        warna_with_berat.append({"warna": w_val, "berat": b_val})
+        total_berat += b_val
 
-        # Kontrol Baris
-        col_btn1, col_btn2, _ = st.columns([1, 1, 2])
-        with col_btn1:
-            if st.button("➕ Tambah Baris"):
-                st.session_state.rows_warna += 1
-                st.rerun()
-        with col_btn2:
-            if st.button("🗑️ Hapus Baris") and st.session_state.rows_warna > 1:
-                st.session_state.rows_warna -= 1
-                st.rerun()
+    # Kontrol Baris
+    col_btn1, col_btn2, _ = st.columns([1, 1, 2])
+    with col_btn1:
+        if st.button("➕ Tambah Baris"):
+            st.session_state.rows_warna += 1
+            st.rerun()
+    with col_btn2:
+        if st.button("🗑️ Hapus Baris") and st.session_state.rows_warna > 1:
+            st.session_state.rows_warna -= 1
+            st.rerun()
 
-        st.success(f"**Total Berat Gabungan:** {total_berat:.2f} gr")
-        return warna_with_berat, total_berat
-
-    # Panggil fragment
-    warna_data, berat_total = input_warna_fragment()
+    st.success(f"**Total Berat Gabungan:** {total_berat:.2f} gr")
     st.write("---")
 
     if st.button("Simpan Data Peminjaman", type="primary", use_container_width=True):
-        if barcode and nama_barang and berat_total > 0:
+        if barcode and nama_barang and total_berat > 0:
             waktu_wib = get_wib_now()
             conn.execute("""
                 INSERT INTO AWE_DB.peminjaman (id, barcode, tanggal_kedatangan, nama_barang, berat_gr, warna_item, waktu_pinjam)
                 VALUES (nextval('AWE_DB.seq_id'), ?, ?, ?, ?, ?, ?)
-            """, (barcode, tgl_datang, nama_barang, berat_total, json.dumps(warna_data), waktu_wib.replace(tzinfo=None)))
+            """, (barcode, tgl_datang, nama_barang, total_berat, json.dumps(warna_with_berat), waktu_wib.replace(tzinfo=None)))
             
             # Reset baris ke 1 setelah simpan
             st.session_state.rows_warna = 1
@@ -144,9 +137,6 @@ with tab1:
 with tab2:
     st.subheader("Form Pengembalian")
     
-    # Mode cepat untuk memproses scan tanpa klik tombol tambahan
-    mode_cepat = st.toggle("Mode Scan Cepat (Otomatis Setujui)", value=True)
-    
     input_barcode_kembali = st.text_input(
         "Scan Barcode untuk Pengembalian", 
         placeholder="Arahkan scanner ke barcode...",
@@ -154,39 +144,23 @@ with tab2:
     )
     
     if input_barcode_kembali:
-        # Cari data yang statusnya masih 'Dipinjam'
         query = "SELECT id, nama_barang, warna_item, berat_gr, waktu_pinjam FROM AWE_DB.peminjaman WHERE barcode = ? AND status = 'Dipinjam'"
         data_kembali = conn.execute(query, (input_barcode_kembali,)).df()
         
         if not data_kembali.empty:
-            if mode_cepat:
-                # Langsung proses pengembalian tanpa menunggu klik tombol
+            data_kembali['warna_item'] = data_kembali['warna_item'].apply(format_warna_display)
+            st.write("Detail Barang yang Dipinjam:")
+            st.dataframe(data_kembali, use_container_width=True, hide_index=True)
+            
+            if st.button("✅ Setujui Pengembalian", type="primary"):
                 waktu_kembali = get_wib_now()
                 conn.execute("""
                     UPDATE AWE_DB.peminjaman 
                     SET status = 'Kembali', waktu_kembali = ? 
                     WHERE barcode = ? AND status = 'Dipinjam'
                 """, (waktu_kembali.replace(tzinfo=None), input_barcode_kembali))
-                
-                st.toast(f"✅ Barcode {input_barcode_kembali} Berhasil Kembali!", icon='📦')
-                # Berikan delay sedikit agar operator bisa melihat feedback sebelum field dibersihkan
-                st.info(f"Berhasil mengembalikan: {data_kembali.iloc[0]['nama_barang']}")
-                if st.button("Siap untuk Scan Berikutnya"):
-                    st.rerun()
-            else:
-                data_kembali['warna_item'] = data_kembali['warna_item'].apply(format_warna_display)
-                st.write("Detail Barang yang Dipinjam:")
-                st.dataframe(data_kembali, use_container_width=True, hide_index=True)
-                
-                if st.button("✅ Setujui Pengembalian", type="primary"):
-                    waktu_kembali = get_wib_now()
-                    conn.execute("""
-                        UPDATE AWE_DB.peminjaman 
-                        SET status = 'Kembali', waktu_kembali = ? 
-                        WHERE barcode = ? AND status = 'Dipinjam'
-                    """, (waktu_kembali.replace(tzinfo=None), input_barcode_kembali))
-                    st.success(f"✅ Barcode {input_barcode_kembali} berhasil dikembalikan!")
-                    st.rerun()
+                st.success(f"✅ Barcode {input_barcode_kembali} berhasil dikembalikan!")
+                st.rerun()
         else:
             st.warning("⚠️ Tidak ada item aktif yang dipinjam dengan barcode tersebut.")
 
