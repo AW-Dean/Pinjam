@@ -72,51 +72,59 @@ if "rows_warna" not in st.session_state:
 with tab1:
     st.subheader("Input Peminjaman Barang")
     
-    # Input Utama (Full Width)
+    # 1. Input Utama (Full Width/Satu Kontainer Penuh)
     barcode = st.text_input("Barcode Utama")
     nama_barang = st.text_input("Nama Barang")
     tgl_datang = st.date_input("Tanggal Kedatangan")
 
     st.write("---")
-    st.info("Klik tombol 'Tambah Baris Warna' di bawah untuk menambah warna yang sama dengan berat berbeda.")
-    st.markdown("##### ⚖️ Rincian Warna & Berat")
-
-    # Input Berat per Warna secara dinamis
-    warna_with_berat = []
-    total_berat = 0.0
     
-    # Loop berdasarkan jumlah baris di session_state
-    for i in range(st.session_state.rows_warna):
-        c1, c2 = st.columns([2, 2])
-        with c1:
-            w_val = st.selectbox(f"Warna {i+1}", ["Semu", "Putih", "PB", "Puth Kapas"], key=f"warna_sel_{i}")
-        with c2:
-            b_val = st.number_input(f"Berat {i+1} (gr)", min_value=0.0, step=0.1, format="%.2f", key=f"berat_in_{i}")
+    # 2. Info diletakkan di atas rincian berat & warna
+    st.info("Klik tombol 'Tambah Baris Warna' di bawah untuk menambah warna yang sama dengan berat berbeda.")
+
+    # 3. Fragment untuk mencegah loading glitch pada seluruh halaman
+    @st.fragment
+    def input_warna_fragment():
+        st.markdown("##### ⚖️ Rincian Warna & Berat")
+        warna_with_berat = []
+        total_berat = 0.0
         
-        warna_with_berat.append({"warna": w_val, "berat": b_val})
-        total_berat += b_val
+        # Loop baris input
+        for i in range(st.session_state.rows_warna):
+            c1, c2 = st.columns([2, 2])
+            with c1:
+                w_val = st.selectbox(f"Warna {i+1}", ["Semu", "Putih", "PB", "Puth Kapas"], key=f"warna_sel_{i}")
+            with c2:
+                b_val = st.number_input(f"Berat {i+1} (gr)", min_value=0.0, step=1.0, format="%.2f", key=f"berat_in_{i}")
+            
+            warna_with_berat.append({"warna": w_val, "berat": b_val})
+            total_berat += b_val
 
-    # Tombol untuk menambah/mengurangi baris
-    col_btn1, col_btn2, _ = st.columns([1, 1, 2])
-    with col_btn1:
-        if st.button("➕ Tambah Baris"):
-            st.session_state.rows_warna += 1
-            st.rerun()
-    with col_btn2:
-        if st.button("🗑️ Hapus Baris") and st.session_state.rows_warna > 1:
-            st.session_state.rows_warna -= 1
-            st.rerun()
+        # Kontrol Baris
+        col_btn1, col_btn2, _ = st.columns([1, 1, 2])
+        with col_btn1:
+            if st.button("➕ Tambah Baris"):
+                st.session_state.rows_warna += 1
+                st.rerun()
+        with col_btn2:
+            if st.button("🗑️ Hapus Baris") and st.session_state.rows_warna > 1:
+                st.session_state.rows_warna -= 1
+                st.rerun()
 
-    st.success(f"**Total Berat Gabungan:** {total_berat:.2f} gr")
+        st.success(f"**Total Berat Gabungan:** {total_berat:.2f} gr")
+        return warna_with_berat, total_berat
+
+    # Panggil fragment
+    warna_data, berat_total = input_warna_fragment()
     st.write("---")
 
     if st.button("Simpan Data Peminjaman", type="primary", use_container_width=True):
-        if barcode and nama_barang and total_berat > 0:
+        if barcode and nama_barang and berat_total > 0:
             waktu_wib = get_wib_now()
             conn.execute("""
                 INSERT INTO AWE_DB.peminjaman (id, barcode, tanggal_kedatangan, nama_barang, berat_gr, warna_item, waktu_pinjam)
                 VALUES (nextval('AWE_DB.seq_id'), ?, ?, ?, ?, ?, ?)
-            """, (barcode, tgl_datang, nama_barang, total_berat, json.dumps(warna_with_berat), waktu_wib.replace(tzinfo=None)))
+            """, (barcode, tgl_datang, nama_barang, berat_total, json.dumps(warna_data), waktu_wib.replace(tzinfo=None)))
             
             # Reset baris ke 1 setelah simpan
             st.session_state.rows_warna = 1
