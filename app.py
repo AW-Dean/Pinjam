@@ -184,6 +184,13 @@ with tab3:
         with col_m2:
             st.metric("⚖️ Total Berat Dipinjam", f"{total_weight:,.2f} gr")
 
+        # --- BREAKDOWN BERAT PER NAMA BARANG ---
+        if not df_active.empty:
+            st.markdown("###### 📋 Rincian Berat Kumulatif per Nama Barang (Status: Dipinjam)")
+            df_sum = df_active.groupby('nama_barang')['berat_gr'].sum().reset_index()
+            df_sum.columns = ["Nama Barang", "Total Berat (gr)"]
+            st.dataframe(df_sum, use_container_width=True, hide_index=True)
+
         df_display = df.copy()
         df_display['warna_item'] = df_display['warna_item'].apply(format_warna_display)
         
