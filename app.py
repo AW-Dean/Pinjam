@@ -22,41 +22,71 @@ def get_connection():
 
 # --- INISIALISASI DATABASE ---
 def init_db(conn):
-    # Dijalankan sekali untuk memastikan skema ada
-    # Buat database dan tabel jika belum ada
     conn.execute("CREATE DATABASE IF NOT EXISTS AWE_DB")
     conn.execute("CREATE SEQUENCE IF NOT EXISTS AWE_DB.seq_id")
-    conn.execute("""
+    conn.execute(""" 
         CREATE TABLE IF NOT EXISTS AWE_DB.peminjaman (
             id INTEGER PRIMARY KEY,
             barcode VARCHAR,
             tanggal_kedatangan DATE,
             nama_barang VARCHAR,
             berat_gr DOUBLE,
+            warna_item VARCHAR,
             status VARCHAR DEFAULT 'Dipinjam',
             waktu_pinjam TIMESTAMP,
             waktu_kembali TIMESTAMP
         )
     """)
 
-    # --- QUERY MIGRASI SEMENTARA ---
-    # Tambahkan warna_item jika belum ada
-    try:
+    # Migrasi Kolom (Hanya dijalankan jika kolom belum ada di tabel lama)
+    columns = conn.execute("PRAGMA table_info('AWE_DB.peminjaman')").df()
+    if 'warna_item' not in columns['name'].values:
         conn.execute("ALTER TABLE AWE_DB.peminjaman ADD COLUMN warna_item VARCHAR")
-    except:
-        pass
-
-    # Hapus kolom lama jika masih ada agar tidak membingungkan
-    try:
-        conn.execute("ALTER TABLE AWE_DB.peminjaman DROP COLUMN seri_item")
-        conn.execute("ALTER TABLE AWE_DB.peminjaman DROP COLUMN jenis_item")
-    except:
-        pass
+    
+    # Hapus kolom usang secara bersih
+    for col in ['seri_item', 'jenis_item']:
+        if col in columns['name'].values:
+            conn.execute(f"ALTER TABLE AWE_DB.peminjaman DROP COLUMN {col}")
 
 # --- UTILS ---
 def get_wib_now():
     return datetime.now(pytz.timezone('Asia/Jakarta'))
 
+# --- DATA ACCESS LAYER (DATABASE OPERATIONS) ---
+def db_add_peminjaman(conn, barcode, tgl, nama, berat, warna_list, waktu):
+    conn.execute("""
+        INSERT INTO AWE_DB.peminjaman (id, barcode, tanggal_kedatangan, nama_barang, berat_gr, warna_item, waktu_pinjam)
+        VALUES (nextval('AWE_DB.seq_id'), ?, ?, ?, ?, ?, ?)
+    """, (barcode, tgl, nama, berat, json.dumps(warna_list), waktu.replace(tzinfo=None)))
+
+def db_get_active_loan(conn, barcode):
+    return conn.execute("""
+        SELECT id, nama_barang, warna_item, berat_gr, waktu_pinjam 
+        FROM AWE_DB.peminjaman 
+        WHERE barcode = ? AND status = 'Dipinjam'
+    """, (barcode,)).df()
+
+def db_process_return(conn, barcode, waktu):
+    conn.execute("""
+        UPDATE AWE_DB.peminjaman 
+        SET status = 'Kembali', waktu_kembali = ? 
+        WHERE barcode = ? AND status = 'Dipinjam'
+    """, (waktu.replace(tzinfo=None), barcode))
+
+def db_get_all_history(conn):
+    return conn.execute("""
+        SELECT id, barcode, nama_barang, warna_item, berat_gr, status, waktu_pinjam, waktu_kembali 
+        FROM AWE_DB.peminjaman 
+        ORDER BY waktu_pinjam DESC
+    """).df()
+
+def db_update_nama(conn, id_item, nama_baru):
+    conn.execute("UPDATE AWE_DB.peminjaman SET nama_barang = ? WHERE id = ?", (nama_baru, id_item))
+
+def db_delete_item(conn, id_item):
+    conn.execute("DELETE FROM AWE_DB.peminjaman WHERE id = ?", (id_item,))
+
+# --- BUSINESS LOGIC ---
 def format_warna_display(json_str):
     try:
         data = json.loads(json_str)
@@ -121,11 +151,8 @@ with tab1:
     if st.button("Simpan Data Peminjaman", type="primary", use_container_width=True):
         if barcode and nama_barang and total_berat > 0:
             waktu_wib = get_wib_now()
-            conn.execute("""
-                INSERT INTO AWE_DB.peminjaman (id, barcode, tanggal_kedatangan, nama_barang, berat_gr, warna_item, waktu_pinjam)
-                VALUES (nextval('AWE_DB.seq_id'), ?, ?, ?, ?, ?, ?)
-            """, (barcode, tgl_datang, nama_barang, total_berat, json.dumps(warna_with_berat), waktu_wib.replace(tzinfo=None)))
-            
+            db_add_peminjaman(conn, barcode, tgl_datang, nama_barang, total_berat, warna_with_berat, waktu_wib)
+
             # Reset baris ke 1 setelah simpan
             st.session_state.rows_warna = 1
             st.success(f"✅ Berhasil menginput data Barcode: {barcode}")
@@ -144,21 +171,15 @@ with tab2:
     )
     
     if input_barcode_kembali:
-        query = "SELECT id, nama_barang, warna_item, berat_gr, waktu_pinjam FROM AWE_DB.peminjaman WHERE barcode = ? AND status = 'Dipinjam'"
-        data_kembali = conn.execute(query, (input_barcode_kembali,)).df()
+        data_kembali = db_get_active_loan(conn, input_barcode_kembali)
         
         if not data_kembali.empty:
             data_kembali['warna_item'] = data_kembali['warna_item'].apply(format_warna_display)
             st.write("Detail Barang yang Dipinjam:")
             st.dataframe(data_kembali, use_container_width=True, hide_index=True)
-            
+
             if st.button("✅ Setujui Pengembalian", type="primary"):
-                waktu_kembali = get_wib_now()
-                conn.execute("""
-                    UPDATE AWE_DB.peminjaman 
-                    SET status = 'Kembali', waktu_kembali = ? 
-                    WHERE barcode = ? AND status = 'Dipinjam'
-                """, (waktu_kembali.replace(tzinfo=None), input_barcode_kembali))
+                db_process_return(conn, input_barcode_kembali, get_wib_now())
                 st.success(f"✅ Barcode {input_barcode_kembali} berhasil dikembalikan!")
                 st.rerun()
         else:
@@ -167,7 +188,7 @@ with tab2:
 # --- TAB 3: LIHAT DATA (EDIT & HAPUS) ---
 with tab3:
     st.subheader("Daftar Riwayat Peminjaman")
-    df = conn.execute("SELECT id, barcode, nama_barang, warna_item, berat_gr, status, waktu_pinjam, waktu_kembali FROM AWE_DB.peminjaman ORDER BY waktu_pinjam DESC").df()
+    df = db_get_all_history(conn)
 
     if not df.empty:
         # --- RINGKASAN DATA (CARDS) ---
@@ -181,11 +202,10 @@ with tab3:
         with col_m2:
             st.metric("⚖️ Total Berat Dipinjam", f"{total_weight:,.2f} gr")
 
-        # --- BREAKDOWN BERAT PER NAMA BARANG ---
         if not df_active.empty:
             st.markdown("###### 📋 Rincian Berat Kumulatif per Nama Barang (Status: Dipinjam)")
-            df_sum = df_active.groupby('nama_barang')['berat_gr'].sum().reset_index()
-            df_sum.columns = ["Nama Barang", "Total Berat (gr)"]
+            df_sum = df_active.groupby('nama_barang')['berat_gr'].sum().reset_index(name="Total Berat (gr)")
+            df_sum.rename(columns={'nama_barang': 'Nama Barang'}, inplace=True)
             st.dataframe(df_sum, use_container_width=True, hide_index=True)
 
         df_display = df.copy()
@@ -203,7 +223,7 @@ with tab3:
             nama_baru = st.text_input("Nama Barang Baru", key="edit_nama_input")
             if st.button("Update Nama"):
                 if nama_baru:
-                    conn.execute("UPDATE AWE_DB.peminjaman SET nama_barang = ? WHERE id = ?", (nama_baru, id_edit))
+                    db_update_nama(conn, id_edit, nama_baru)
                     st.success(f"ID {id_edit} berhasil diupdate.")
                     st.rerun()
 
@@ -211,7 +231,7 @@ with tab3:
             st.write("🗑️ **Hapus Data**")
             id_hapus = st.number_input("Masukkan ID untuk Hapus", min_value=0, step=1, key="delete_id_input")
             if st.button("Hapus Data Permanen", type="primary", key="delete_btn"):
-                conn.execute("DELETE FROM AWE_DB.peminjaman WHERE id = ?", (id_hapus,))
+                db_delete_item(conn, id_hapus)
                 st.warning(f"Data ID {id_hapus} telah dihapus.")
                 st.rerun()
     else:
