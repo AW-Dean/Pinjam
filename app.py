@@ -72,21 +72,18 @@ if "rows_warna" not in st.session_state:
 with tab1:
     st.subheader("Input Peminjaman Barang")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        barcode = st.text_input("Barcode Utama")
-        nama_barang = st.text_input("Nama Barang")
-        tgl_datang = st.date_input("Tanggal Kedatangan")
-    
-    with col2:
-        st.info("Klik tombol 'Tambah Baris Warna' di bawah untuk menambah warna yang sama dengan berat berbeda.")
+    # Input Utama (Full Width)
+    barcode = st.text_input("Barcode Utama")
+    nama_barang = st.text_input("Nama Barang")
+    tgl_datang = st.date_input("Tanggal Kedatangan")
+
+    st.write("---")
+    st.info("Klik tombol 'Tambah Baris Warna' di bawah untuk menambah warna yang sama dengan berat berbeda.")
+    st.markdown("##### ⚖️ Rincian Warna & Berat")
 
     # Input Berat per Warna secara dinamis
     warna_with_berat = []
     total_berat = 0.0
-    
-    st.write("---")
-    st.markdown("##### ⚖️ Rincian Warna & Berat")
     
     # Loop berdasarkan jumlah baris di session_state
     for i in range(st.session_state.rows_warna):
