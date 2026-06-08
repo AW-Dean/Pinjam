@@ -97,7 +97,7 @@ def format_warna_display(json_str):
 conn = get_connection()
 init_db(conn)
 
-st.title("📦 Sistem Manajemen Peminjaman (AWE_DB)")
+st.title(" 📦 Sistem Manajemen Peminjaman ")
 
 tab1, tab2, tab3 = st.tabs(["📝 Form Peminjaman", "🔄 Pengembalian", "📊 Data Peminjaman"])
 
