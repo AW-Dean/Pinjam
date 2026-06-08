@@ -57,6 +57,13 @@ def init_db(conn):
 def get_wib_now():
     return datetime.now(pytz.timezone('Asia/Jakarta'))
 
+def format_warna_display(json_str):
+    try:
+        data = json.loads(json_str)
+        return " | ".join([f"{d['warna']}: {d['berat']}g" for d in data])
+    except:
+        return json_str
+
 conn = get_connection()
 init_db(conn)
 
@@ -140,10 +147,11 @@ with tab2:
     
     if input_barcode_kembali:
         # Cari data yang statusnya masih 'Dipinjam'
-        query = "SELECT id, nama_barang, waktu_pinjam FROM AWE_DB.peminjaman WHERE barcode = ? AND status = 'Dipinjam'"
+        query = "SELECT id, nama_barang, warna_item, waktu_pinjam FROM AWE_DB.peminjaman WHERE barcode = ? AND status = 'Dipinjam'"
         data_kembali = conn.execute(query, (input_barcode_kembali,)).df()
         
         if not data_kembali.empty:
+            data_kembali['warna_item'] = data_kembali['warna_item'].apply(format_warna_display)
             st.write("Detail Barang yang Dipinjam:")
             st.dataframe(data_kembali, use_container_width=True, hide_index=True)
             
@@ -165,14 +173,6 @@ with tab3:
     df = conn.execute("SELECT id, barcode, nama_barang, berat_gr, warna_item, status, waktu_pinjam, waktu_kembali FROM AWE_DB.peminjaman ORDER BY waktu_pinjam DESC").df()
 
     if not df.empty:
-        # Pre-processing agar tampilan warna_item lebih cantik di tabel
-        def format_warna_display(json_str):
-            try:
-                data = json.loads(json_str)
-                return " | ".join([f"{d['warna']}: {d['berat']}g" for d in data])
-            except:
-                return json_str
-
         df_display = df.copy()
         df_display['warna_item'] = df_display['warna_item'].apply(format_warna_display)
         
