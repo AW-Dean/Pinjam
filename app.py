@@ -27,6 +27,11 @@ def get_connection():
 # --- INISIALISASI DATABASE ---
 def init_db(conn):
     conn.execute("CREATE DATABASE IF NOT EXISTS AWE_DB")
+    
+    # UNCOMMENT baris di bawah ini JIKA ingin mereset tabel karena error schema (Binder Error)
+    # Setelah dijalankan sekali dan berhasil, Anda bisa memberikan komentar (#) kembali.
+    # conn.execute(f"DROP TABLE IF EXISTS {DB_TABLE}")
+
     conn.execute(f"CREATE SEQUENCE IF NOT EXISTS {DB_SEQ}")
     conn.execute(f""" 
         CREATE TABLE IF NOT EXISTS {DB_TABLE} (
