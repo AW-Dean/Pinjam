@@ -8,6 +8,10 @@ import json
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(page_title="AWE Peminjaman Barang", layout="wide")
 
+# --- KONFIGURASI DATABASE (Ganti di sini untuk pindah tabel) ---
+DB_TABLE = "AWE_DB.tes_peminjaman"
+DB_SEQ = "AWE_DB.seq_id"
+
 # --- KONEKSI MOTHERDUCK ---
 @st.cache_resource
 def get_connection():
@@ -23,9 +27,9 @@ def get_connection():
 # --- INISIALISASI DATABASE ---
 def init_db(conn):
     conn.execute("CREATE DATABASE IF NOT EXISTS AWE_DB")
-    conn.execute("CREATE SEQUENCE IF NOT EXISTS AWE_DB.seq_id")
-    conn.execute(""" 
-        CREATE TABLE IF NOT EXISTS AWE_DB.peminjaman (
+    conn.execute(f"CREATE SEQUENCE IF NOT EXISTS {DB_SEQ}")
+    conn.execute(f""" 
+        CREATE TABLE IF NOT EXISTS {DB_TABLE} (
             id INTEGER PRIMARY KEY,
             barcode VARCHAR,
             tanggal_kedatangan DATE,
@@ -39,14 +43,14 @@ def init_db(conn):
     """)
 
     # Migrasi Kolom (Hanya dijalankan jika kolom belum ada di tabel lama)
-    columns = conn.execute("PRAGMA table_info('AWE_DB.peminjaman')").df()
+    columns = conn.execute(f"PRAGMA table_info('{DB_TABLE}')").df()
     if 'warna_item' not in columns['name'].values:
-        conn.execute("ALTER TABLE AWE_DB.peminjaman ADD COLUMN warna_item VARCHAR")
+        conn.execute(f"ALTER TABLE {DB_TABLE} ADD COLUMN warna_item VARCHAR")
     
     # Hapus kolom usang secara bersih
     for col in ['seri_item', 'jenis_item']:
         if col in columns['name'].values:
-            conn.execute(f"ALTER TABLE AWE_DB.peminjaman DROP COLUMN {col}")
+            conn.execute(f"ALTER TABLE {DB_TABLE} DROP COLUMN {col}")
 
 # --- UTILS ---
 def get_wib_now():
@@ -54,37 +58,37 @@ def get_wib_now():
 
 # --- DATA ACCESS LAYER (DATABASE OPERATIONS) ---
 def db_add_peminjaman(conn, barcode, tgl, nama, berat, warna_list, waktu):
-    conn.execute("""
-        INSERT INTO AWE_DB.peminjaman (id, barcode, tanggal_kedatangan, nama_barang, berat_gr, warna_item, waktu_pinjam)
-        VALUES (nextval('AWE_DB.seq_id'), ?, ?, ?, ?, ?, ?)
+    conn.execute(f"""
+        INSERT INTO {DB_TABLE} (id, barcode, tanggal_kedatangan, nama_barang, berat_gr, warna_item, waktu_pinjam)
+        VALUES (nextval('{DB_SEQ}'), ?, ?, ?, ?, ?, ?)
     """, (barcode, tgl, nama, berat, json.dumps(warna_list), waktu.replace(tzinfo=None)))
 
 def db_get_active_loan(conn, barcode):
-    return conn.execute("""
+    return conn.execute(f"""
         SELECT id, nama_barang, warna_item, berat_gr, waktu_pinjam 
-        FROM AWE_DB.peminjaman 
+        FROM {DB_TABLE} 
         WHERE barcode = ? AND status = 'Dipinjam'
     """, (barcode,)).df()
 
 def db_process_return(conn, barcode, waktu):
-    conn.execute("""
-        UPDATE AWE_DB.peminjaman 
+    conn.execute(f"""
+        UPDATE {DB_TABLE} 
         SET status = 'Kembali', waktu_kembali = ? 
         WHERE barcode = ? AND status = 'Dipinjam'
     """, (waktu.replace(tzinfo=None), barcode))
 
 def db_get_all_history(conn):
-    return conn.execute("""
+    return conn.execute(f"""
         SELECT id, barcode, nama_barang, warna_item, berat_gr, status, waktu_pinjam, waktu_kembali 
-        FROM AWE_DB.peminjaman 
+        FROM {DB_TABLE} 
         ORDER BY waktu_pinjam DESC
     """).df()
 
 def db_update_nama(conn, id_item, nama_baru):
-    conn.execute("UPDATE AWE_DB.peminjaman SET nama_barang = ? WHERE id = ?", (nama_baru, id_item))
+    conn.execute(f"UPDATE {DB_TABLE} SET nama_barang = ? WHERE id = ?", (nama_baru, id_item))
 
 def db_delete_item(conn, id_item):
-    conn.execute("DELETE FROM AWE_DB.peminjaman WHERE id = ?", (id_item,))
+    conn.execute(f"DELETE FROM {DB_TABLE} WHERE id = ?", (id_item,))
 
 # --- BUSINESS LOGIC ---
 def format_warna_display(json_str):
