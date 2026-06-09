@@ -89,11 +89,11 @@ def db_get_all_history(conn):
         ORDER BY waktu_pinjam DESC
     """).df()
 
-def db_update_nama(conn, id_item, nama_baru):
-    conn.execute(f"UPDATE {DB_TABLE} SET nama_barang = ? WHERE id = ?", (nama_baru, id_item))
+def db_update_nama(conn, barcode, nama_baru):
+    conn.execute(f"UPDATE {DB_TABLE} SET nama_barang = ? WHERE barcode = ?", (nama_baru, barcode))
 
-def db_delete_item(conn, id_item):
-    conn.execute(f"DELETE FROM {DB_TABLE} WHERE id = ?", (id_item,))
+def db_delete_item(conn, barcode):
+    conn.execute(f"DELETE FROM {DB_TABLE} WHERE barcode = ?", (barcode,))
 
 # --- BUSINESS LOGIC ---
 def format_warna_display(json_str):
@@ -228,20 +228,21 @@ with tab3:
         
         with col_edit:
             st.write("📝 **Edit Nama Barang**")
-            id_edit = st.number_input("Masukkan ID untuk Edit", min_value=0, step=1, key="edit_id_input")
+            barcode_edit = st.text_input("Masukkan Barcode untuk Edit", key="edit_barcode_input")
             nama_baru = st.text_input("Nama Barang Baru", key="edit_nama_input")
             if st.button("Update Nama"):
-                if nama_baru:
-                    db_update_nama(conn, id_edit, nama_baru)
-                    st.success(f"ID {id_edit} berhasil diupdate.")
+                if barcode_edit and nama_baru:
+                    db_update_nama(conn, barcode_edit, nama_baru)
+                    st.success(f"Barcode {barcode_edit} berhasil diupdate.")
                     st.rerun()
 
         with col_delete:
             st.write("🗑️ **Hapus Data**")
-            id_hapus = st.number_input("Masukkan ID untuk Hapus", min_value=0, step=1, key="delete_id_input")
+            barcode_hapus = st.text_input("Masukkan Barcode untuk Hapus", key="delete_barcode_input")
             if st.button("Hapus Data Permanen", type="primary", key="delete_btn"):
-                db_delete_item(conn, id_hapus)
-                st.warning(f"Data ID {id_hapus} telah dihapus.")
-                st.rerun()
+                if barcode_hapus:
+                    db_delete_item(conn, barcode_hapus)
+                    st.warning(f"Data Barcode {barcode_hapus} telah dihapus.")
+                    st.rerun()
     else:
         st.info("Belum ada data tersedia.")
