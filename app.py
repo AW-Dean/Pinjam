@@ -30,7 +30,7 @@ def init_db(conn):
     
     # UNCOMMENT baris di bawah ini JIKA ingin mereset tabel karena error schema (Binder Error)
     # PENTING: Beri komentar kembali setelah berhasil dijalankan sekali agar data tidak hilang terus-menerus.
-    conn.execute(f"DROP TABLE IF EXISTS {DB_TABLE}")
+    # conn.execute(f"DROP TABLE IF EXISTS {DB_TABLE}")
     # Opsi tambahan: Reset sequence jika ingin ID mulai dari 1 lagi
     # conn.execute(f"DROP SEQUENCE IF EXISTS {DB_SEQ}")
 
