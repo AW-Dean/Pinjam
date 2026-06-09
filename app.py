@@ -29,8 +29,10 @@ def init_db(conn):
     conn.execute("CREATE DATABASE IF NOT EXISTS AWE_DB")
     
     # UNCOMMENT baris di bawah ini JIKA ingin mereset tabel karena error schema (Binder Error)
-    # Setelah dijalankan sekali dan berhasil, Anda bisa memberikan komentar (#) kembali.
-    # conn.execute(f"DROP TABLE IF EXISTS {DB_TABLE}")
+    # PENTING: Beri komentar kembali setelah berhasil dijalankan sekali agar data tidak hilang terus-menerus.
+    conn.execute(f"DROP TABLE IF EXISTS {DB_TABLE}")
+    # Opsi tambahan: Reset sequence jika ingin ID mulai dari 1 lagi
+    # conn.execute(f"DROP SEQUENCE IF EXISTS {DB_SEQ}")
 
     conn.execute(f"CREATE SEQUENCE IF NOT EXISTS {DB_SEQ}")
     conn.execute(f""" 
@@ -50,13 +52,11 @@ def init_db(conn):
     # Migrasi Kolom (Hanya dijalankan jika kolom belum ada di tabel lama)
     columns = conn.execute(f"PRAGMA table_info('{DB_TABLE}')").df()
     if 'warna_item' not in columns['name'].values:
-        conn.execute(f"ALTER TABLE {DB_TABLE} ADD COLUMN warna_item VARCHAR")
+        try:
+            conn.execute(f"ALTER TABLE {DB_TABLE} ADD COLUMN warna_item VARCHAR")
+        except:
+            pass
     
-    # Hapus kolom usang secara bersih
-    for col in ['seri_item', 'jenis_item']:
-        if col in columns['name'].values:
-            conn.execute(f"ALTER TABLE {DB_TABLE} DROP COLUMN {col}")
-
 # --- UTILS ---
 def get_wib_now():
     return datetime.now(pytz.timezone('Asia/Jakarta'))
