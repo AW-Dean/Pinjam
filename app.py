@@ -9,7 +9,7 @@ import json
 st.set_page_config(page_title="AWE Peminjaman Barang", layout="wide")
 
 # --- KONFIGURASI DATABASE (Ganti di sini untuk pindah tabel) ---
-DB_TABLE = "AWE_DB.tes_peminjaman"
+DB_TABLE = "AWE_DB.peminjaman"
 DB_SEQ = "AWE_DB.seq_id"
 
 # --- KONEKSI MOTHERDUCK ---
