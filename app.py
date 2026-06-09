@@ -239,10 +239,23 @@ with tab3:
         with col_delete:
             st.write("🗑️ **Hapus Data**")
             barcode_hapus = st.text_input("Masukkan Barcode untuk Hapus", key="delete_barcode_input")
-            if st.button("Hapus Data Permanen", type="primary", key="delete_btn"):
-                if barcode_hapus:
-                    db_delete_item(conn, barcode_hapus)
-                    st.warning(f"Data Barcode {barcode_hapus} telah dihapus.")
-                    st.rerun()
+            
+            if barcode_hapus:
+                # Filter data berdasarkan barcode untuk pratinjau sebelum hapus
+                df_target = df_display[df_display['barcode'] == barcode_hapus]
+                
+                if not df_target.empty:
+                    st.write("🔍 **Detail data yang akan dihapus:**")
+                    st.dataframe(df_target, use_container_width=True, hide_index=True)
+                    
+                    # Mekanisme Persetujuan/Konfirmasi
+                    agree = st.checkbox("Saya yakin ingin menghapus semua record untuk barcode ini secara permanen.", key="chk_hapus")
+                    
+                    if st.button("Hapus Data Permanen", type="primary", key="delete_btn", disabled=not agree):
+                        db_delete_item(conn, barcode_hapus)
+                        st.warning(f"Data Barcode {barcode_hapus} telah dihapus.")
+                        st.rerun()
+                else:
+                    st.error("Barcode tidak ditemukan dalam riwayat.")
     else:
         st.info("Belum ada data tersedia.")
